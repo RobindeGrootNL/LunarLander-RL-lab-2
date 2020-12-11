@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import torch.nn
+from torch import nn
 
 class MyNetwork(nn.Module):
     """ Create a feedforward neural network 

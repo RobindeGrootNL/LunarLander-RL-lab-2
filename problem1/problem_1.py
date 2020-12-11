@@ -14,13 +14,17 @@
 #
 
 # Load packages
+from collections import namedtuple
 import numpy as np
 import gym
 import torch
 import matplotlib.pyplot as plt
 from tqdm import trange
 from DQN_agent import RandomAgent
+from DQN_neural_networks import MyNetwork
 from ExperienceBuffer import ExperienceReplayBuffer
+from torch import nn
+import torch
 
 def running_average(x, N):
     ''' Function used to compute the running average
@@ -44,6 +48,14 @@ n_ep_running_average = 50                    # Running average of 50 episodes
 n_actions = env.action_space.n               # Number of available actions
 dim_state = len(env.observation_space.high)  # State dimensionality
 buffer_length = 5000                         # Max length of Experience Replay Buffer
+batch_size = 16
+update_freq = int(buffer_length / batch_size)
+learning_rate = 10e-3
+epsilon_max = 0.99
+epsilon_min = 0.05
+
+print('n_actions: ', n_actions)
+print('dim_state: ', dim_state)
 
 # We will use these variables to compute the average episodic reward and
 # the average number of steps per episode
@@ -51,7 +63,7 @@ episode_reward_list = []       # this list contains the total reward per episode
 episode_number_of_steps = []   # this list contains the number of steps per episode
 
 # Random agent initialization
-agent = RandomAgent(n_actions)
+random_agent = RandomAgent(n_actions)
 
 # Experience and experience buffer initialization
 Experience = namedtuple('Experience',
@@ -61,9 +73,9 @@ buffer = ExperienceReplayBuffer(buffer_length)
 
 # Reset enviroment data and initialize variables
 state = env.reset()
-for i in range(len(buffer)):
+for i in range(buffer_length):
     # Take a random action
-    action = agent.forward(state)
+    action = random_agent.forward(state)
     # Get next state and reward.  The done variable
     # will be True if you reached the goal position,
     # False otherwise
@@ -80,23 +92,106 @@ for i in range(len(buffer)):
 # It shows a nice progression bar that you can update with useful information
 EPISODES = trange(N_episodes, desc='Episode: ', leave=True)
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+# TO DO: CHECK IF STATE SPACE IS CORRECTLY DEFINED
+network = MyNetwork(input_size = dim_state, output_size = n_actions, device=device).to(device)
+target_network = MyNetwork(input_size = dim_state, output_size = n_actions, device=device).to(device)
+
+optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
+
 for i in EPISODES:
     # Reset enviroment data and initialize variables
     done = False
     state = env.reset()
     total_episode_reward = 0.
     t = 0
+
+    # Define epsilon
+    epsilon = np.max([epsilon_min, epsilon_max-(epsilon_max - epsilon_min)*(i-1)/(N_episodes*0.9-1)])
+
     while not done:
-        # Take a random action
-        action = agent.forward(state)
+        # Put state in a tensor for the NN
+        state_tensor = torch.tensor([state],
+                                    requires_grad=False,
+                                    dtype=torch.float32).to(device)
+
+        values = network(state_tensor)
+        print('values dimensions: ', values.shape)
+        print('values', values)
+
+        # Take epsilon greedy action
+        p = np.random.random()
+        if p < epsilon:
+            print('random action')
+            action = np.random.randint(0,values.shape[1])
+        else:
+            print('greedy action')
+            action = values.max(1)[1].item()
+        print('action', action)
 
         # Get next state and reward.  The done variable
         # will be True if you reached the goal position,
         # False otherwise
         next_state, reward, done, _ = env.step(action)
 
+        # Append experience to Buffer
+        exp = Experience(state, action, reward, next_state, done)
+
+        print('Experience: ', exp)
+
+        buffer.append(exp)
+
         # Update episode reward
         total_episode_reward += reward
+
+        # Sample experiences from the buffer 
+        # Sample a batch of 3 elements
+        states, actions, rewards, next_states, dones = buffer.sample_batch(batch_size)
+
+        # Training process, set gradients to 0
+        optimizer.zero_grad()
+
+        # Compute output of the network given the states batch
+        # TO DO: CHECK IF requires_grad SHOULD BE TRUE OR FALSE HERE
+        target_NN_outputs = target_network(torch.tensor(states,
+                                            requires_grad=True,
+                                            dtype=torch.float32).to(device))
+
+        print('target_NN_outputs shape: ', target_NN_outputs.shape)
+
+        target_values = [0] * batch_size
+
+        # TO DO: FIX THIS SHITTTTTT
+
+        for i in range(len(values)):
+            if dones[i] == True:
+                target_values[i] = rewards[i]
+            else:
+                target_values[i] = rewards[i] + discount_factor * target_NN_outputs[i].max(1)[1].item()
+
+        NN_outputs = network(torch.tensor(states,
+                                        requires_grad=True,
+                                        dtype=torch.float32).to(device))
+
+        target_values = torch.tensor(target_values, requires_grad=True, dtype=torch.float32).to(device)
+        # Compute loss function
+        loss = nn.functional.mse_loss(
+                        target_values, # TO DO: ADD TARGET NETWORK OUTPUTS
+                        target_values)
+
+        # Compute gradient
+        loss.backward()
+
+        # Clip gradient norm to 1
+        nn.utils.clip_grad_norm_(network.parameters(), max_norm=1.)
+
+        # Perform backward pass (backpropagation)
+        optimizer.step()
+
+        # TO DO: UPDATE TARGET NETWORK
+        if update_freq % (t+1) == 0:
+            target_network = network
 
         # Update state for next iteration
         state = next_state

@@ -47,9 +47,9 @@ discount_factor = 0.95                       # Value of the discount factor
 n_ep_running_average = 50                    # Running average of 50 episodes
 n_actions = env.action_space.n               # Number of available actions
 dim_state = len(env.observation_space.high)  # State dimensionality
+buffer_length = 5000                         # Max length of Experience Replay Buffer
 batch_size = 128
 update_freq = 5
-buffer_length = batch_size * update_freq     # Max length of Experience Replay Buffer
 learning_rate = 10e-3
 epsilon_max = 0.99
 epsilon_min = 0.05
@@ -151,6 +151,7 @@ for i in EPISODES:
 
         # Training process, set gradients to 0
         optimizer.zero_grad()
+        network.train()
 
         # Compute output of the network given the states batch
         # TO DO: CHECK IF requires_grad SHOULD BE TRUE OR FALSE HERE
@@ -161,30 +162,31 @@ for i in EPISODES:
         #print('target_NN_outputs shape: ', target_NN_outputs.shape)
         #print('target_NN_outputs[1] shape', target_NN_outputs[1].shape)
 
-        target_values = [0] * batch_size
+        target_values = np.zeros((128,4))
 
         # TO DO: FIX THIS SHITTTTTT
 
         for j in range(batch_size):
             if dones[j] == True:
-                target_values[j] = rewards[j]
+                target_values[j, :] = rewards[j]
             else:
                 #print(target_NN_outputs[i])
                 #print(target_NN_outputs[i].max().item())
-                target_values[j] = rewards[j] + discount_factor * target_NN_outputs[j].max().item()
+                for l in range(target_NN_outputs.shape[1]):
+                    target_values[j, l] = rewards[j] + discount_factor * target_NN_outputs[j].max().item()
 
         NN_outputs = network(torch.tensor(states,
                                         requires_grad=False,
                                         dtype=torch.float32).to(device))
 
-        NN_values = [0] * batch_size
+        #NN_values = [0] * batch_size
 
-        for k in range(batch_size):
-            NN_values[k] = NN_outputs[k][actions[k]]
+        #for k in range(batch_size):
+        #    NN_values[k] = NN_outputs[k][actions[k]]
 
         #print('type NN_values: ', type(NN_values))
 
-        NN_values = torch.tensor(NN_values, requires_grad=True, dtype=torch.float32).to(device)
+        #NN_values = torch.tensor(NN_values, requires_grad=True, dtype=torch.float32).to(device)
 
         target_values = torch.tensor(target_values, requires_grad=False, dtype=torch.float32).to(device)
 
@@ -194,7 +196,7 @@ for i in EPISODES:
         # Compute loss function
         loss = nn.functional.mse_loss(
                         target_values,
-                        NN_values)
+                        NN_outputs)
 
         # Compute gradient
         loss.backward()

@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 class MyNetwork(nn.Module):
     """ Create a feedforward neural network 
@@ -16,16 +17,21 @@ class MyNetwork(nn.Module):
         self.input_layer = nn.Linear(input_size, 8)
         self.input_layer_activation = nn.ReLU()
 
+        self.hidden1 = nn.Linear(8, 64)
+        self.hidden2 = nn.Linear(64,32)
+
         # Create output layer
-        self.output_layer = nn.Linear(8, output_size)
+        self.output_layer = nn.Linear(32, output_size)
 
     def forward(self, x):
         # Function used to compute the forward pass
 
         # Compute first layer
-        l1 = self.input_layer(x)
-        l1 = self.input_layer_activation(l1)
+        x = self.input_layer(x)
+        x = self.input_layer_activation(x)
 
+        x = F.relu(self.hidden1(x))
+        x = F.relu(self.hidden2(x))
         # Compute output layer
-        out = self.output_layer(l1)
+        out = self.output_layer(x)
         return out.to(self.device)

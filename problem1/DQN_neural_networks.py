@@ -17,11 +17,11 @@ class MyNetwork(nn.Module):
         self.input_layer = nn.Linear(input_size, 8)
         self.input_layer_activation = nn.ReLU()
 
-        self.hidden1 = nn.Linear(8, 64)
-        self.hidden2 = nn.Linear(64,32)
+        self.hidden1 = nn.Linear(8, 16)
+        self.hidden2 = nn.Linear(16,16)
 
         # Create output layer
-        self.output_layer = nn.Linear(32, output_size)
+        self.output_layer = nn.Linear(16, output_size)
 
     def forward(self, x):
         # Function used to compute the forward pass

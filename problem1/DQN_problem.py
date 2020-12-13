@@ -71,6 +71,7 @@ for i in EPISODES:
         # will be True if you reached the goal position,
         # False otherwise
         next_state, reward, done, _ = env.step(action)
+        print("reward: ", reward)
 
         # Update episode reward
         total_episode_reward += reward

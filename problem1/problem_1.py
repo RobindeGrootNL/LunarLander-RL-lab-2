@@ -42,15 +42,15 @@ env = gym.make('LunarLander-v2')
 env.reset()
 
 # Parameters
-N_episodes = 100                             # Number of episodes
+N_episodes = 300                             # Number of episodes
 discount_factor = 0.95                       # Value of the discount factor
 n_ep_running_average = 50                    # Running average of 50 episodes
 n_actions = env.action_space.n               # Number of available actions
 dim_state = len(env.observation_space.high)  # State dimensionality
-batch_size = 128
-update_freq = 5
-buffer_length = batch_size * update_freq     # Max length of Experience Replay Buffer
-learning_rate = 10e-3
+batch_size = 64
+buffer_length = 10000                        # Max length of Experience Replay Buffer
+update_freq = 170
+learning_rate = 10e-4
 epsilon_max = 0.99
 epsilon_min = 0.05
 
@@ -72,19 +72,20 @@ Experience = namedtuple('Experience',
 buffer = ExperienceReplayBuffer(buffer_length)
 
 # Reset enviroment data and initialize variables
-state = env.reset()
 for i in range(buffer_length):
+    state = env.reset()
     # Take a random action
     action = random_agent.forward(state)
     # Get next state and reward.  The done variable
     # will be True if you reached the goal position,
     # False otherwise
     next_state, reward, done, _ = env.step(action)
+    #print("reward: ", reward)
     # Put experience in buffer
     exp = Experience(state, action, reward, next_state, done)
     buffer.append(exp)
     # Update state for next iteration
-    state = next_state
+    #state = next_state
 
 ### Training process
 
@@ -93,10 +94,11 @@ for i in range(buffer_length):
 EPISODES = trange(N_episodes, desc='Episode: ', leave=True)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device("cpu")
 
 # TO DO: CHECK IF STATE SPACE IS CORRECTLY DEFINED
-network = MyNetwork(input_size = dim_state, output_size = n_actions, device=device).to(device)
 target_network = MyNetwork(input_size = dim_state, output_size = n_actions, device=device).to(device)
+network = MyNetwork(input_size = dim_state, output_size = n_actions, device=device).to(device)
 
 optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
 
@@ -111,6 +113,10 @@ for i in EPISODES:
     epsilon = np.max([epsilon_min, epsilon_max-(epsilon_max - epsilon_min)*(i-1)/(N_episodes*0.9-1)])
 
     while not done:
+
+        if i >= 280:
+            env.render()
+
         # Put state in a tensor for the NN
         state_tensor = torch.tensor([state],
                                     requires_grad=False,
@@ -124,7 +130,7 @@ for i in EPISODES:
         p = np.random.random()
         if p < epsilon:
             #print('random action')
-            action = np.random.randint(0,values.shape[1])
+            action = env.action_space.sample()
         else:
             #print('greedy action')
             action = values.max(1)[1].item()
@@ -143,6 +149,8 @@ for i in EPISODES:
         buffer.append(exp)
 
         # Update episode reward
+        #print("action: ", action)
+        #print("reward: ", reward)
         total_episode_reward += reward
 
         # Sample experiences from the buffer 
@@ -161,17 +169,19 @@ for i in EPISODES:
         #print('target_NN_outputs shape: ', target_NN_outputs.shape)
         #print('target_NN_outputs[1] shape', target_NN_outputs[1].shape)
 
-        target_values = [0] * batch_size
+        # target_values = [0] * batch_size
 
-        # TO DO: FIX THIS SHITTTTTT
+        # TO DO: MAKE THIS INTO ONE LINE
+        # y = reward +  discount_factor* (1 - dones) * target_q_values.
+        target_values = rewards + discount_factor * (np.ones(batch_size)-dones) * target_NN_outputs.max().item()
 
-        for j in range(batch_size):
-            if dones[j] == True:
-                target_values[j] = rewards[j]
-            else:
-                #print(target_NN_outputs[i])
-                #print(target_NN_outputs[i].max().item())
-                target_values[j] = rewards[j] + discount_factor * target_NN_outputs[j].max().item()
+        #for j in range(batch_size):
+        #    if dones[j] == True:
+        #        target_values[j] = rewards[j]
+        #    else:
+        #        #print(target_NN_outputs[i])
+        #        #print(target_NN_outputs[i].max().item())
+        #        target_values[j] = rewards[j] + discount_factor * target_NN_outputs[j].max().item()
 
         NN_outputs = network(torch.tensor(states,
                                         requires_grad=False,
@@ -188,8 +198,8 @@ for i in EPISODES:
 
         target_values = torch.tensor(target_values, requires_grad=False, dtype=torch.float32).to(device)
 
-        #print(target_values.shape)
-        #print(NN_values.shape)
+        #print(target_values)
+        #print(NN_values)
 
         # Compute loss function
         loss = nn.functional.mse_loss(
@@ -207,11 +217,12 @@ for i in EPISODES:
 
         # TO DO: UPDATE TARGET NETWORK
         if update_freq % (t+1) == 0:
-            target_network = network
+            #print("Episode number: {}. Updating target model".format(i))
+            target_network.load_state_dict(network.state_dict())
 
         # Update state for next iteration
         state = next_state
-        t+= 1
+        t += 1
 
     # Append episode reward and total number of steps
     episode_reward_list.append(total_episode_reward)
@@ -219,6 +230,10 @@ for i in EPISODES:
 
     # Close environment
     env.close()
+
+
+    # TO DO: IMPLEMENT EARLY STOPPING WHEN PASSED THE THRESHOLD
+
 
     # Updates the tqdm update bar with fresh information
     # (episode number, total reward of the last episode, total number of Steps
@@ -229,6 +244,7 @@ for i in EPISODES:
         running_average(episode_reward_list, n_ep_running_average)[-1],
         running_average(episode_number_of_steps, n_ep_running_average)[-1]))
 
+torch.save(target_network.cpu(), 'neural-network-1.pth')
 
 # Plot Rewards and steps
 fig, ax = plt.subplots(nrows=1, ncols=2, figsize=(16, 9))

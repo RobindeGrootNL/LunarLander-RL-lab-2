@@ -17,9 +17,8 @@
 import numpy as np
 import gym
 import torch
-import matplotlib.pyplot as plt
 from tqdm import trange
-from DQN_agent import RandomAgent
+import matplotlib.pyplot as plt
 
 def running_average(x, N):
     ''' Function used to compute the running average
@@ -32,79 +31,77 @@ def running_average(x, N):
         y = np.zeros_like(x)
     return y
 
-# Import and initialize the discrete Lunar Laner Environment
+# Load model
+try:
+    model = torch.load('neural-network-1.pth')
+    model.cpu()
+    print('Network model: {}'.format(model))
+except:
+    print('File neural-network-1.pth not found!')
+    exit(-1)
+
+# Import and initialize Mountain Car Environment
 env = gym.make('LunarLander-v2')
 env.reset()
 
 # Parameters
-N_episodes = 50                             # Number of episodes
-discount_factor = 0.95                       # Value of the discount factor
-n_ep_running_average = 50                    # Running average of 50 episodes
-n_actions = env.action_space.n               # Number of available actions
-dim_state = len(env.observation_space.high)  # State dimensionality
+N_EPISODES = 50            # Number of episodes to run for trainings
+CONFIDENCE_PASS = 50
 
-# We will use these variables to compute the average episodic reward and
-# the average number of steps per episode
-episode_reward_list = []       # this list contains the total reward per episode
-episode_number_of_steps = []   # this list contains the number of steps per episode
+# Reward
+episode_reward_list = []  # Used to store episodes reward
 
-# Random agent initialization
-agent = RandomAgent(n_actions)
-
-### Training process
-
-# trange is an alternative to range in python, from the tqdm library
-# It shows a nice progression bar that you can update with useful information
-EPISODES = trange(N_episodes, desc='Episode: ', leave=True)
-
+# Simulate episodes
+print('Checking solution...')
+EPISODES = trange(N_EPISODES, desc='Episode: ', leave=True)
 for i in EPISODES:
-    # Reset enviroment data and initialize variables
+    EPISODES.set_description("Episode {}".format(i))
+    # Reset enviroment data
     done = False
     state = env.reset()
     total_episode_reward = 0.
-    t = 0
     while not done:
-        # Take a random action
-        action = agent.forward(state)
-
         # Get next state and reward.  The done variable
         # will be True if you reached the goal position,
         # False otherwise
-        next_state, reward, done, _ = env.step(action)
-        #print("reward: ", reward)
+        q_values = model(torch.tensor([state]))
+
+        _, action = torch.max(q_values, axis=1)
+        next_state, reward, done, _ = env.step(action.item())
 
         # Update episode reward
         total_episode_reward += reward
 
         # Update state for next iteration
         state = next_state
-        t+= 1
 
-    # Append episode reward and total number of steps
+    # Append episode reward
     episode_reward_list.append(total_episode_reward)
-    episode_number_of_steps.append(t)
 
     # Close environment
     env.close()
 
-    # Updates the tqdm update bar with fresh information
-    # (episode number, total reward of the last episode, total number of Steps
-    # of the last episode, average reward, average number of steps)
-    EPISODES.set_description(
-        "Episode {} - Reward/Steps: {:.1f}/{} - Avg. Reward/Steps: {:.1f}/{}".format(
-        i, total_episode_reward, t,
-        running_average(episode_reward_list, n_ep_running_average)[-1],
-        running_average(episode_number_of_steps, n_ep_running_average)[-1]))
+avg_reward = np.mean(episode_reward_list)
+confidence = np.std(episode_reward_list) * 1.96 / np.sqrt(N_EPISODES)
 
+episode_reward_list
 
-# Plot Rewards and steps
+print('Policy achieves an average total reward of {:.1f} +/- {:.1f} with confidence 95%.'.format(
+                avg_reward,
+                confidence))
+
+if avg_reward - confidence >= CONFIDENCE_PASS:
+    print('Your policy passed the test!')
+else:
+    print("Your policy did not pass the test! The average reward of your policy needs to be greater than {} with 95% confidence".format(CONFIDENCE_PASS))
+
 fig = plt.figure()
-plt.plot([i for i in range(1, N_episodes+1)], episode_reward_list, label='Episode reward')
+plt.plot([i for i in range(1, N_EPISODES+1)], episode_reward_list, label='Episode reward')
 #ax.plot([i for i in range(1, N_episodes+1)], running_average(
     #episode_reward_list, n_ep_running_average), label='Avg. episode reward')
 plt.xlabel('Episodes')
 plt.ylabel('Total reward')
-plt.title('Total Reward vs Episodes of Random Agent')
+plt.title('Total Reward vs Episodes of Model')
 plt.legend()
 plt.grid(alpha=0.3)
 
@@ -118,6 +115,6 @@ plt.grid(alpha=0.3)
 #ax[1].grid(alpha=0.3)
 plt.show()
 
-with open('random_50_episodes.txt', 'w') as filehandle:
+with open('model_50_episodes.txt', 'w') as filehandle:
     for listitem in episode_reward_list:
         filehandle.write('%s\n' % listitem)

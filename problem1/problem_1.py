@@ -113,7 +113,7 @@ def run_DQN_lander(N_episodes=900,
     EPISODES = trange(N_episodes, desc='Episode: ', leave=True)
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #device = torch.device("cpu")
+    device = torch.device("cpu")
     
     # TO DO: CHECK IF STATE SPACE IS CORRECTLY DEFINED
     target_network = MyNetwork(input_size = dim_state, output_size = n_actions, device=device).to(device)
@@ -255,18 +255,3 @@ def run_DQN_lander(N_episodes=900,
     plt.clf()
 
 run_DQN_lander(parameter_changed='best_params')
-
-## Discount factor
-#discount_values = [1, 0.5]
-#for discount_factor in discount_values:
-#    run_DQN_lander(discount_factor=discount_factor, parameter_changed='discount_factor_{}'.format(discount_factor))
-#
-## Number of episodes
-#episodes_values = [300, 900]
-#for n_episodes in episodes_values:
-#    run_DQN_lander(N_episodes=n_episodes, parameter_changed='n_episodes_{}'.format(n_episodes))
-#
-## Batch size
-#batch_sizes = [8, 128]
-#for batch_size in batch_sizes:
-#    run_DQN_lander(batch_size=batch_size, parameter_changed='batch_size_{}'.format(batch_size))

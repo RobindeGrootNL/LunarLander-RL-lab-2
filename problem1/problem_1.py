@@ -54,16 +54,13 @@ dim_state = len(env.observation_space.low)   # State dimensionality
 #epsilon_min = 0.05
 #reward_threshold = 100
 
-print('n_actions: ', n_actions)
-print('dim_state: ', dim_state)
-
 def run_DQN_lander(N_episodes=900, 
                     discount_factor=0.99, 
                     n_ep_running_average=50, 
                     n_actions=n_actions,
                     dim_state=dim_state,
                     batch_size=64,
-                    buffer_length=16834,
+                    buffer_length=16384,
                     update_freq=256,
                     learning_rate=10e-4,
                     epsilon_max=0.99,
@@ -93,7 +90,7 @@ def run_DQN_lander(N_episodes=900,
         # will be True if you reached the goal position,
         # False otherwise
         next_state, reward, done, _ = env.step(action)
-        #print("reward: ", reward)
+        
         # Put experience in buffer
         exp = Experience(state, action, reward, next_state, done)
         buffer.append(exp)
@@ -102,9 +99,6 @@ def run_DQN_lander(N_episodes=900,
             state = env.reset()
         else:
             state = next_state
-    
-        # Update state for next iteration
-        #state = next_state
     
     ### Training process
     

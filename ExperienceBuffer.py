@@ -1,3 +1,7 @@
+# Núria Casals 950801-T740
+# Robin de Groot 981116-T091
+
+
 import numpy as np
 from collections import deque, namedtuple
 

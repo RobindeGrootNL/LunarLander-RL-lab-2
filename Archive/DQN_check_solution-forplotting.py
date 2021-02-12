@@ -1,3 +1,7 @@
+# Núria Casals 950801-T740
+# Robin de Groot 981116-T091
+
+
 # Copyright [2020] [KTH Royal Institute of Technology] Licensed under the
 # Educational Community License, Version 2.0 (the "License"); you may
 # not use this file except in compliance with the License. You may
